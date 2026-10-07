@@ -24,7 +24,7 @@ For new imports and metadata refreshes, the server-side `ItemUpdated` listener a
 Build with the .NET 9 SDK:
 
 ```powershell
-dotnet publish .\Jellyfin.Plugin.DateAddedAdvanced\Jellyfin.Plugin.DateAddedAdvanced.csproj -c Release -o .\bin
+dotnet publish .\Jellyfin.Plugin.DateAddedToDateAired\Jellyfin.Plugin.DateAddedToDateAired.csproj -c Release -o .\bin
 ```
 
 Copy `Jellyfin.Plugin.DateAddedToDateAired.dll` to a dedicated plugin directory such as `plugins/Jellyfin.Plugin.DateAddedToDateAired`, then restart Jellyfin. Do not install it into the old DateAddedAdvanced directory.

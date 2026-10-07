@@ -37,12 +37,14 @@ public sealed class ApplyReleaseAirDatesTask : IScheduledTask, IConfigurableSche
         var complete = 0;
         foreach (var item in movies)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await ProcessOneAsync(item, counts, cancellationToken).ConfigureAwait(false);
             progress.Report(++complete * 100d / Math.Max(1, total));
         }
 
         foreach (var item in episodes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await ProcessOneAsync(item, counts, cancellationToken).ConfigureAwait(false);
             progress.Report(++complete * 100d / Math.Max(1, total));
         }

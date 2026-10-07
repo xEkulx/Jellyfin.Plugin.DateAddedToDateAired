@@ -1,125 +1,40 @@
-<h1 align="center">Jellyfin DateAdded Advanced Plugin</h1>
-<p align="center">
-  <img alt="DateAdded Advanced Logo" src="logo.png" width="320" />
-</p>
+# Date Added To Date Aired
 
-# What is it?
-The function of the plugin is twofold:
-* Primarily, when activating the plugin, the behavior of how Jellyfin handles DateAdded will be changed as described below. There is no additional configuration needed.
-* Secondly, the plugin brings a NFO writer which can be enabled manually per library. To do this, in library settings, you will find a new entry called `NFO DateAdded Creator` in category `Metadata savers`.
+Server-side Jellyfin plugin for **Jellyfin Server 10.11.8**. It makes native Latest/Recently Added use real release or air dates by changing only Jellyfin's persisted `DateCreated` value:
 
-In the plugin settings, there are various config parameters available.
+- `Movie.DateCreated` is set to `Movie.PremiereDate`.
+- `Episode.DateCreated` is set to `Episode.PremiereDate` (Jellyfin's first-air-date field).
 
-# Installation
+It deliberately does not modify NFO files, media files, clients, Series, Seasons, music, photos, or other item types. `dateadded` in Sonarr/Radarr NFO files remains untouched.
 
-Two methods to install this
+## Safety
 
-## Method #1 (Preferred)
+Missing premiere/air dates leave `DateCreated` untouched. Future dates are also left untouched by default (configurable). Changes use Jellyfin's normal `ILibraryManager.UpdateItemAsync` persistence API. The update listener writes only when the stored value differs, so its own `ItemUpdated` notification terminates without another write.
 
-By this method, Jellyfin will automatically keep the plugin up to date.
+Changes are persistent Jellyfin metadata. Disabling or removing the plugin stops future processing but does not restore previous values. A normal metadata refresh can change values depending on its metadata providers; run the task again if needed. This plugin intentionally has no speculative restore mechanism.
 
-1. In your Jellyfin instance add a new plugin repository with this URL:
-```
-https://verybadsoldier.github.io/Jellyfin.Plugin.DateAddedAdvanced/manifest.json
-```
-2. The plugin should appear now in your plugin catalog and you can install it
+## Existing libraries and new imports
 
-## Method #2
+Run **Dashboard → Scheduled Tasks → Apply Release/Air Dates to Date Added** to process an existing library. It is cancellable, skips already-correct items, continues after individual failures, and logs counts.
 
-1. Go to the release page here on GitHub and download the latest release as ZIP file:
-https://github.com/verybadsoldier/Jellyfin.Plugin.DateAddedAdvanced/releases
+For new imports and metadata refreshes, the server-side `ItemUpdated` listener applies the mapping after Jellyfin has imported metadata. Enable or disable Movies, TV Episodes, automatic processing, and the future-date policy in the plugin configuration.
 
-2. Go to you Jellyfin Data Directory (https://jellyfin.org/docs/general/administration/configuration/)
-3. Go into the `plugins` subdirectory
-4. Create another subdirectory called `Jellyfin.Plugin.DateAddedAdvanced`
-5. Extract the downloaded ZIP file into that directory
-6. Restart your Jellyfin server
+## Build and install
 
+Build with the .NET 9 SDK:
 
-# How it works
-
-This plugin adds advanced capabilities to control the DateAdded property of library items and also fixes one shortcoming of the default Jellyfin behavior.
-By default, Jellyfin uses the created date from file and directory attributes for the DateAdded property. The DateAdded is a useful information worth preserving and the file attributes might get changed unintentionally over the years. So they might get lost when having to reset the Jeyllfin database.
-On Linux, due to the behavior of the .NET framework, Jellyfin is not acquiring the created date correctly and is wrongly reporting modified date instead as reported here:
-https://github.com/jellyfin/jellyfin/issues/10655
-
-With this plugin, the source for the DateAdded property in Jellyfin is changed. The plugin can also store and read DateAdded to and from .nfo files. Also, the bug described above gets fixed when using the plugin and the correct create date is used by Jellyfin also on Linux (when supported by the filesystem used).
-
-When the plugin is installed and a library scan is performed, then this will be happen related to DateAdded properties. When scanning, .nfo files will always have priority over file and directory filesystem attributes. So, when an .nfo file is found, then the `dateadded` node is read and used.
-If no .nfo file is found, then the default behavior of Jellyfin is changed in the following ways:
-
-## For files (movies, songs, episodes etc.):
-It can be configured which file date should be used:
-* Creation date
-* Modification date
-* Oldest from creation and modification date
-* Newest from creation and modification date
-* Current time
-
-Reasoning is that for files that do not get changed (movies, TV show episodes), the modified date is quite stable and usually does not change on the filesystem. So, even after years the modification date might be the date the file was added to your collection.
-For files that do change (e.g. music files due to re-tagging), the modified date usually does not tell when this file was added to your collection.
-So, e.g. the DateAdded source can be configured to `Oldest` so Jellyfin will automatically use created date _OR_ modified date depending on which one is older.
-
-## For folders (TV shows, TV show season, Music albums, Music artists etc.):
-Automatically the oldest date of all contained files will be used. This means, e.g. for a music album, all music files will be considered and the oldest date will be used as DateAdded for the album.
-
-
-# .nfo Files
-Jellyfin is capable of reading and writing .nfo files on its own. But the content .nfo files will only be considered under certain conditions. With this plugin, the `dateadded` data will always be used from .nfo files. Currently, these .nfo files are supported:
-* tvshow.nfo
-* season.nfo
-* album.nfo
-* artist.nfo
-* {tv show episode filename}.nfo
-
-Newly created NFO files by this plugin, will only contain `dateadded`. E.g.:
-```
-<album>
-  <dateadded>2001-04-03</dateadded>
-</album>
+```powershell
+dotnet publish .\Jellyfin.Plugin.DateAddedAdvanced\Jellyfin.Plugin.DateAddedAdvanced.csproj -c Release -o .\bin
 ```
 
-The value of `dateadded` being written to the .nfo files is directly the value from the Jellyfin database.
+Copy `Jellyfin.Plugin.DateAddedToDateAired.dll` to a dedicated plugin directory such as `plugins/Jellyfin.Plugin.DateAddedToDateAired`, then restart Jellyfin. Do not install it into the old DateAddedAdvanced directory.
 
+## Test procedure
 
-# Configuration
+1. Back up the Jellyfin data directory.
+2. Install the DLL and restart Jellyfin 10.11.8.
+3. Confirm the configuration defaults, then run the scheduled task.
+4. Inspect a movie/episode through the API or database-backed metadata view: its Date Added must match the imported `PremiereDate` date.
+5. Add an old item and a yesterday-dated item, then use each native client’s normal Latest/Recently Added view. The old item should not rank as newly added; the yesterday item should.
 
-There are several configuration options available. You can configure the plugin from the Jellyfin Dashboard. Go to **Dashboard > Plugins** and click on **DateAdded Advanced** to find the settings.
-
-| Name  | Description  | Default |
-|-|-|-|
-| UseSeasonDateForEpisodes  | TV Shows: Use season dates as episode date | true |
-| DateAddedSourceAudio  | Which date source to use for audio (see below) | Created |
-| DateAddedSourceVideo  | Which date source to use for video (see below)  | Created |
-| AddDateToExistingNfos  | Add `<dateadded>` to existing NFO files when missing (existing timestamps are always preserved) |  true  |
-| RenameExistingMisformedNfos  | It may be the case that when scanning media files there are already existing .nfo files which are not Jellyfin XML files. When using the option RenameExistingMisformedNfos, such files will be renamed by appending a .bak suffix. Then, a new and proper NFO file can be created to store the dateadded information. (available in >= 2.1.0.0) |  true   |
-| WriteArtistNfo  | Enable writing of artist.nfo  |   false  |
-| WriteAlbumNfo  | Enable writing of album.nfo  |  true  |
-| WriteSeasonNfo  |  Enable writing of season.nfo |  false  |
-| WriteTvShowNfo  | Enable writing of tvshow.nfo  |  true  |
-| WriteEpisodeNfo  |  Enable writing of [epiosde_name].nfo |  true  |
-| WriteMovieNfo  | Enable writing of [movie_name].nfo  |  true  |
-
-
-## Date Sources
-| Name | Description |
-|-|-|
-| Created | Filesystem attribute "created" |
-| Modified | Filesystem attribute "modified" |
-| Newest | Automatically select the newer timestamp from "created" and "modified" |
-| Oldest | Automatically select the older timestamp from "created" and "modified" |
-| Current | Current time |
-
-# Building from Source
-
-1. Clone this repository
-
-2. Ensure you have .NET Core SDK setup and installed
-
-3. Build the plugin with following command:
-
-```bash
-dotnet publish --configuration Release --output bin
-```
-
-4. Place the resulting `Jellyfin.Plugin.DateAddedAdvanced.dll` file in a folder called `plugins/Jellyfin.Plugin.DateAddedAdvanced` inside your Jellyfin installation / data directory.
+Native clients were not tested by this repository; this plugin changes the server-side field that Jellyfin 10.11.8 orders and groups for Latest.

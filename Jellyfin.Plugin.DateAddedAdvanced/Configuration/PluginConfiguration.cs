@@ -1,76 +1,12 @@
 using MediaBrowser.Model.Plugins;
-using Microsoft.Extensions.Options;
 
-namespace MediaBrowser.Providers.Plugins.NfoCreateDate.Configuration
+namespace Jellyfin.Plugin.DateAddedToDateAired.Configuration;
+
+/// <summary>Configuration for the server-side date mapping.</summary>
+public sealed class PluginConfiguration : BasePluginConfiguration
 {
-    /// <summary>
-    /// Plugin configuration class for the studio image provider.
-    /// </summary>
-    public class PluginConfiguration : BasePluginConfiguration
-    {
-        public PluginConfiguration()
-        {
-            UseSeasonDateForEpisodes = true;
-            DateAddedSourceAudio = DateSource.Created;
-            DateAddedSourceVideo = DateSource.Created;
-            AddDateToExistingNfos = true;
-            RenameExistingMisformedNfos = true;
-            WriteArtistNfo = false;
-            WriteAlbumNfo = true;
-            WriteSeasonNfo = false;
-            WriteTvShowNfo = true;
-            WriteEpisodeNfo = true;
-            WriteMovieNfo = true;
-        }
-
-        public enum DateSource
-        {
-            Modified,
-            Created,
-            Oldest,
-            Newest,
-            Current,
-        }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether createdate for seasons should be read from season.nfo.
-        /// </summary>
-        public bool UseSeasonDateForEpisodes { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether dateadded should be added to existing nfo files when missing.
-        /// </summary>
-        public bool AddDateToExistingNfos { get; set; }
-
-        /// <summary>
-        /// Legacy property kept for backward compatibility with older configuration files.
-        /// </summary>
-        [System.Obsolete("Use AddDateToExistingNfos instead.")]
-        public bool UpdateExistingNfos
-        {
-            get => AddDateToExistingNfos;
-            set => AddDateToExistingNfos = value;
-        }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether existing nfo files should be renamed to.bak file if misformed.
-        /// </summary>
-        public bool RenameExistingMisformedNfos { get; set; }
-
-        public DateSource DateAddedSourceAudio { get; set; }
-
-        public DateSource DateAddedSourceVideo { get; set; }
-
-        public bool WriteArtistNfo { get; set; }
-
-        public bool WriteAlbumNfo { get; set; }
-
-        public bool WriteSeasonNfo { get; set; }
-
-        public bool WriteTvShowNfo { get; set; }
-
-        public bool WriteEpisodeNfo { get; set; }
-
-        public bool WriteMovieNfo { get; set; }
-    }
+    public bool EnableMovies { get; set; } = true;
+    public bool EnableTvEpisodes { get; set; } = true;
+    public bool ProcessNewItemsAutomatically { get; set; } = true;
+    public bool SkipFuturePremiereDates { get; set; } = true;
 }

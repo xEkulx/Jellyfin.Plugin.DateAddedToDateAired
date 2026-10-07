@@ -1,16 +1,16 @@
 ---
-name: "DateAdded Advanced"
-guid: "c31ce313-d3d3-4a93-ad6d-8b235a9c2078"
+name: "Date Added To Date Aired"
+guid: "a7fcd5d8-0879-48d1-96f3-b802a9a91128"
 version: "<template>"
-targetAbi: "12.0.0.0"
+targetAbi: "10.11.8.0"
 framework: "<template>"
-overview: "Improved DateAdded handling"
+overview: "Use release and air dates for Jellyfin Date Added"
 description: >
-  Allows fore more fine-grained control over DateAdded attributes for database entries
+  Server-side Movie and Episode Date Added mapping from PremiereDate
 category: "General"
-owner: "verybadsoldier"
-imageUrl: "https://raw.githubusercontent.com/verybadsoldier/Jellyfin.Plugin.DateAddedAdvanced/main/logo.png"
+owner: "xEkulx"
+imageUrl: "https://raw.githubusercontent.com/xEkulx/Jellyfin.Plugin.DateAddedToDateAired/main/logo.png"
 artifacts:
-- "Jellyfin.Plugin.DateAddedAdvanced.dll"
+- "Jellyfin.Plugin.DateAddedToDateAired.dll"
 changelog: >
   changelog

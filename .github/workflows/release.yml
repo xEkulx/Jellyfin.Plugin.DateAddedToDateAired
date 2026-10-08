@@ -6,6 +6,17 @@ on:
     branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: Existing semantic version to build and release (without the v prefix)
+        required: true
+        type: string
+      confirm_publish:
+        description: Set to yes only after reviewing the requested tag and release assets
+        required: true
+        default: 'no'
+        type: choice
+        options: ['no', 'yes']
 
 permissions:
   contents: read
@@ -20,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref }}
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
@@ -30,40 +43,58 @@ jobs:
       - run: dotnet build Jellyfin.Plugin.DateAddedToDateAired.sln -c Release --no-restore
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.confirm_publish == 'yes')
     needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref }}
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 9.0.x
       - name: Package the plugin
         id: package
         shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            VERSION="$REQUESTED_VERSION"
+            TAG="v$VERSION"
+          else
+            TAG="$GITHUB_REF_NAME"
+            VERSION="${TAG#v}"
+          fi
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           dotnet publish "$PROJECT" -c Release -o package "/p:Version=$VERSION"
           test -f "package/$ZIP_NAME.dll"
           find package -maxdepth 1 -type f ! -name "$ZIP_NAME.dll" -delete
           (cd package && zip -9 "../$ZIP_NAME-$VERSION.zip" "$ZIP_NAME.dll")
           test "$(unzip -Z1 "$ZIP_NAME-$VERSION.zip")" = "$ZIP_NAME.dll"
-          sha256sum "$ZIP_NAME-$VERSION.zip" | tee "$ZIP_NAME-$VERSION.zip.sha256"
-          md5sum "$ZIP_NAME-$VERSION.zip" | awk '{print $1}' >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "asset=$ZIP_NAME-$VERSION.zip" >> "$GITHUB_OUTPUT"
+          SHA256=$(sha256sum "$ZIP_NAME-$VERSION.zip" | awk '{print $1}')
+          MD5=$(md5sum "$ZIP_NAME-$VERSION.zip" | awk '{print $1}')
+          printf '%s  %s\n' "$SHA256" "$ZIP_NAME-$VERSION.zip" > "$ZIP_NAME-$VERSION.zip.sha256"
+          printf 'version=%s\nasset=%s\ntag=%s\nmd5=%s\nsha256=%s\n' "$VERSION" "$ZIP_NAME-$VERSION.zip" "$TAG" "$MD5" "$SHA256" >> "$GITHUB_OUTPUT"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.asset }}" "${{ steps.package.outputs.asset }}.sha256" --title "Date Added To Date Aired v${{ steps.package.outputs.version }}" --generate-notes
+        run: |
+          if gh release view "${{ steps.package.outputs.tag }}" >/dev/null 2>&1; then
+            gh release upload "${{ steps.package.outputs.tag }}" "${{ steps.package.outputs.asset }}" "${{ steps.package.outputs.asset }}.sha256" --clobber
+          else
+            gh release create "${{ steps.package.outputs.tag }}" "${{ steps.package.outputs.asset }}" "${{ steps.package.outputs.asset }}.sha256" --title "Date Added To Date Aired v${{ steps.package.outputs.version }}" --generate-notes
+          fi
       - name: Update plugin manifest with the published asset
         env:
           VERSION: ${{ steps.package.outputs.version }}
           ASSET: ${{ steps.package.outputs.asset }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          git fetch origin main
+          git checkout -B release-manifest origin/main
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
           from datetime import datetime, timezone

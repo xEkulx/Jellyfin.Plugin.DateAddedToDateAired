@@ -64,6 +64,19 @@ public sealed class ReleaseDateProcessorTests
         library.Verify(x => x.UpdateItemAsync(It.IsAny<BaseItem>(), It.IsAny<BaseItem>(), It.IsAny<ItemUpdateType>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task DisabledMovieProcessingDoesNotPersist()
+    {
+        using var helper = new PluginTestHelper(new PluginConfiguration { EnableMovies = false });
+        var (processor, library) = CreateProcessor();
+        var movie = new Movie { PremiereDate = new DateTime(1999, 3, 31), DateCreated = DateTime.UtcNow };
+
+        var result = await processor.ProcessAsync(movie, new Folder(), CancellationToken.None);
+
+        Assert.Equal(ProcessResult.Disabled, result);
+        library.Verify(x => x.UpdateItemAsync(It.IsAny<BaseItem>(), It.IsAny<BaseItem>(), It.IsAny<ItemUpdateType>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static (ReleaseDateProcessor Processor, Mock<ILibraryManager> Library) CreateProcessor()
     {
         var library = new Mock<ILibraryManager>();
@@ -76,7 +89,7 @@ internal sealed class PluginTestHelper : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "DateAddedToDateAiredTests_" + Guid.NewGuid().ToString("N"));
 
-    public PluginTestHelper()
+    public PluginTestHelper(PluginConfiguration? configuration = null)
     {
         Directory.CreateDirectory(_path);
         var paths = new Mock<IApplicationPaths>();
@@ -86,7 +99,7 @@ internal sealed class PluginTestHelper : IDisposable
         paths.SetupGet(x => x.DataPath).Returns(_path);
         paths.SetupGet(x => x.ProgramDataPath).Returns(_path);
         var plugin = new Plugin(paths.Object, Mock.Of<IXmlSerializer>());
-        plugin.UpdateConfiguration(new PluginConfiguration());
+        plugin.UpdateConfiguration(configuration ?? new PluginConfiguration());
     }
 
     public void Dispose()

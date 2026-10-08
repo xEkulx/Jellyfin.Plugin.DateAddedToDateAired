@@ -1,40 +1,74 @@
 # Date Added To Date Aired
 
-Server-side Jellyfin plugin for **Jellyfin Server 10.11.8**. It makes native Latest/Recently Added use real release or air dates by changing only Jellyfin's persisted `DateCreated` value:
+**Date Added To Date Aired** is a server-side Jellyfin plugin for Jellyfin Server **10.11.8 and 10.11.9**. It changes Jellyfin's internal `DateCreated`/Date Added value so native Latest and Recently Added queries use the media's real date:
 
-- `Movie.DateCreated` is set to `Movie.PremiereDate`.
-- `Episode.DateCreated` is set to `Episode.PremiereDate` (Jellyfin's first-air-date field).
+- Movies: `DateCreated ← PremiereDate` (release date)
+- TV episodes: `DateCreated ← PremiereDate` (first-air date)
 
-It deliberately does not modify NFO files, media files, clients, Series, Seasons, music, photos, or other item types. `dateadded` in Sonarr/Radarr NFO files remains untouched.
+The plugin does not inject or modify Jellyfin Web, and it does not modify NFO files, media files, clients, or Jellyfin's SQLite database directly. Native Recently Added presentation can still vary by Jellyfin client; the plugin changes the server-side value used for its ordering.
 
-## Safety
+## Compatibility and safety
 
-Missing premiere/air dates leave `DateCreated` untouched. Future dates are also left untouched by default (configurable). Changes use Jellyfin's normal `ILibraryManager.UpdateItemAsync` persistence API. The update listener writes only when the stored value differs, so its own `ItemUpdated` notification terminates without another write.
+- Built against Jellyfin 10.11.8 public packages (`net9.0`); validated manually on Jellyfin 10.11.9 for Windows and browser-based native Jellyfin UI.
+- Only `Movie` and `Episode` items are processed. Series, Seasons, music, photos, collections, and other types are untouched.
+- An item with no `PremiereDate` is skipped. Future dates are skipped by default and can be allowed in configuration.
+- Updates use Jellyfin's `ILibraryManager.UpdateItemAsync` API. The scheduled task is cancellable; automatic processing is bounded and deduplicated per item.
+- Changes are persistent Jellyfin metadata. Disabling or uninstalling the plugin stops future processing but does **not** restore original Date Added values. Back up Jellyfin before processing an existing library.
 
-Changes are persistent Jellyfin metadata. Disabling or removing the plugin stops future processing but does not restore previous values. A normal metadata refresh can change values depending on its metadata providers; run the task again if needed. This plugin intentionally has no speculative restore mechanism.
+## Configuration
 
-## Existing libraries and new imports
+Open **Dashboard → Plugins → Date Added To Date Aired**:
 
-Run **Dashboard → Scheduled Tasks → Apply Release/Air Dates to Date Added** to process an existing library. It is cancellable, skips already-correct items, continues after individual failures, and logs counts.
+- **Enable Movies** — process movie release dates.
+- **Enable TV Episodes** — process episode air dates.
+- **Process new items automatically after metadata updates** — process imports and metadata refreshes.
+- **Leave future release/air dates unchanged** — enabled by default.
 
-For new imports and metadata refreshes, the server-side `ItemUpdated` listener applies the mapping after Jellyfin has imported metadata. Enable or disable Movies, TV Episodes, automatic processing, and the future-date policy in the plugin configuration.
+Settings are stored in Jellyfin's plugin configuration (`Jellyfin.Plugin.DateAddedToDateAired.xml`). Saving a disabled option genuinely disables its corresponding automatic processing; the existing-library task also respects Movie/Episode and future-date settings.
 
-## Build and install
+For existing libraries run **Dashboard → Scheduled Tasks → Apply Release/Air Dates to Date Added**. Review the task summary in the server log.
 
-Build with the .NET 9 SDK:
+## Installation
+
+### Plugin repository (after the first release is published)
+
+1. Open **Dashboard → Plugins → Repositories → Add Repository**.
+2. Enter the repository manifest URL: `https://raw.githubusercontent.com/xEkulx/Jellyfin.Plugin.DateAddedToDateAired/main/manifest.json`.
+3. Open the Plugin Catalog, install **Date Added To Date Aired**, then restart Jellyfin.
+
+The manifest intentionally has no release entry until a GitHub Release exists. A release URL and checksum must never be guessed.
+
+### Manual installation — Windows and Linux
+
+1. Download the versioned ZIP from the GitHub Releases page and verify its SHA-256 file.
+2. Stop Jellyfin.
+3. Extract the ZIP into a new directory beneath Jellyfin's data-directory `plugins` folder, for example:
+
+   - Windows: `%ProgramData%\Jellyfin\Server\plugins\DateAddedToDateAired_1.0.0`
+   - Linux package/Docker: `/var/lib/jellyfin/plugins/DateAddedToDateAired_1.0.0` or the container's mounted Jellyfin data directory.
+
+4. Confirm the directory contains `Jellyfin.Plugin.DateAddedToDateAired.dll` directly (no extra nested ZIP directory), then start Jellyfin.
+
+Upgrades use a new versioned plugin folder. Remove the prior version only after a successful restart and validation.
+
+## Build and package
+
+Requires the .NET 9 SDK:
 
 ```powershell
-dotnet publish .\Jellyfin.Plugin.DateAddedToDateAired\Jellyfin.Plugin.DateAddedToDateAired.csproj -c Release -o .\bin
+dotnet test .\Jellyfin.Plugin.DateAddedToDateAired.sln
+dotnet publish .\Jellyfin.Plugin.DateAddedToDateAired\Jellyfin.Plugin.DateAddedToDateAired.csproj -c Release
+.\scripts\package-release.ps1 -Version 1.0.0
 ```
 
-Copy `Jellyfin.Plugin.DateAddedToDateAired.dll` to a dedicated plugin directory such as `plugins/Jellyfin.Plugin.DateAddedToDateAired`, then restart Jellyfin. Do not install it into the old DateAddedAdvanced directory.
+The packaging script emits a DLL-only ZIP, SHA-256 checksum, and release notes in `artifacts\release`.
 
-## Test procedure
+## Release process
 
-1. Back up the Jellyfin data directory.
-2. Install the DLL and restart Jellyfin 10.11.8.
-3. Confirm the configuration defaults, then run the scheduled task.
-4. Inspect a movie/episode through the API or database-backed metadata view: its Date Added must match the imported `PremiereDate` date.
-5. Add an old item and a yesterday-dated item, then use each native client’s normal Latest/Recently Added view. The old item should not rank as newly added; the yesterday item should.
+Tag `v1.0.0` after review. The GitHub Actions workflow tests, builds, packages, checks the ZIP contents, creates the GitHub Release, then updates `manifest.json` with the release's real download URL, MD5 checksum required by Jellyfin manifests, and timestamp. GitHub Pages is optional; GitHub's raw HTTPS manifest URL above is sufficient.
 
-Native clients were not tested by this repository; this plugin changes the server-side field that Jellyfin 10.11.8 orders and groups for Latest.
+## Attribution and license
+
+This repository is a modified derivative of [verybadsoldier/Jellyfin.Plugin.DateAddedAdvanced](https://github.com/verybadsoldier/Jellyfin.Plugin.DateAddedAdvanced), originally developed by **verybadsoldier**. The local Git history and upstream releases identify that author. This fork substantially changes its purpose and implementation; it is not the upstream DateAddedAdvanced plugin.
+
+The project remains licensed under the [GNU GPL v3.0](LICENSE). Keep the license and this attribution with redistributed modified versions.

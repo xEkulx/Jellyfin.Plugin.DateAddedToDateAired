@@ -1,9 +1,9 @@
 ---
 name: "Date Added To Date Aired"
 guid: "a7fcd5d8-0879-48d1-96f3-b802a9a91128"
-version: "<template>"
-targetAbi: "10.11.8.0"
-framework: "<template>"
+version: "1.0.0"
+targetAbi: "10.11.0.0"
+framework: "net9.0"
 overview: "Use release and air dates for Jellyfin Date Added"
 description: >
   Server-side Movie and Episode Date Added mapping from PremiereDate

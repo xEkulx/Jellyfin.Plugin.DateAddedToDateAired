@@ -17,15 +17,31 @@
 <script>
 (() => {
   const page = document.querySelector('#DateAddedToDateAiredConfigPage');
-  page.addEventListener('pageshow', () => ApiClient.getPluginConfiguration(PluginConfig.pluginId).then(c => {
-    enableMovies.checked = c.EnableMovies; enableEpisodes.checked = c.EnableTvEpisodes;
-    automatic.checked = c.ProcessNewItemsAutomatically; skipFuture.checked = c.SkipFuturePremiereDates;
-  }));
-  document.querySelector('#DateAddedToDateAiredConfigForm').addEventListener('submit', e => { e.preventDefault(); ApiClient.getPluginConfiguration(PluginConfig.pluginId).then(c => {
-    c.EnableMovies = enableMovies.checked; c.EnableTvEpisodes = enableEpisodes.checked;
-    c.ProcessNewItemsAutomatically = automatic.checked; c.SkipFuturePremiereDates = skipFuture.checked;
-    ApiClient.updatePluginConfiguration(PluginConfig.pluginId, c).then(Dashboard.processPluginConfigurationUpdateResult);
-  }); });
+  const form = page.querySelector('#DateAddedToDateAiredConfigForm');
+  const enableMovies = page.querySelector('#enableMovies');
+  const enableEpisodes = page.querySelector('#enableEpisodes');
+  const automatic = page.querySelector('#automatic');
+  const skipFuture = page.querySelector('#skipFuture');
+
+  const load = async () => {
+    const configuration = await ApiClient.getPluginConfiguration(PluginConfig.pluginId);
+    enableMovies.checked = configuration.EnableMovies;
+    enableEpisodes.checked = configuration.EnableTvEpisodes;
+    automatic.checked = configuration.ProcessNewItemsAutomatically;
+    skipFuture.checked = configuration.SkipFuturePremiereDates;
+  };
+
+  page.addEventListener('pageshow', load);
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const configuration = await ApiClient.getPluginConfiguration(PluginConfig.pluginId);
+    configuration.EnableMovies = enableMovies.checked;
+    configuration.EnableTvEpisodes = enableEpisodes.checked;
+    configuration.ProcessNewItemsAutomatically = automatic.checked;
+    configuration.SkipFuturePremiereDates = skipFuture.checked;
+    await ApiClient.updatePluginConfiguration(PluginConfig.pluginId, configuration);
+    Dashboard.processPluginConfigurationUpdateResult();
+  });
 })();
 </script>
 </body>

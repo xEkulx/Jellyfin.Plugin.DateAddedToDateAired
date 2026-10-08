@@ -4,6 +4,9 @@
     <TargetFramework>net9.0</TargetFramework>
     <AssemblyName>Jellyfin.Plugin.DateAddedToDateAired</AssemblyName>
     <RootNamespace>Jellyfin.Plugin.DateAddedToDateAired</RootNamespace>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <CodeAnalysisRuleSet>../jellyfin.ruleset</CodeAnalysisRuleSet>
@@ -25,10 +28,5 @@
   <ItemGroup>
     <EmbeddedResource Include="Configuration\config.html" />
   </ItemGroup>
-
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec ContinueOnError="true" Command=":: Create the plugin subfolder if it doesn't exist&#xD;&#xA;if not exist &quot;%25LOCALAPPDATA%25\jellyfin\plugins\$(TargetName)&quot; mkdir &quot;%25LOCALAPPDATA%25\jellyfin\plugins\$(TargetName)&quot;&#xD;&#xA;&#xD;&#xA;:: Copy the primary DLL and PDB&#xD;&#xA;xcopy /Y /D &quot;$(TargetPath)&quot; &quot;%25LOCALAPPDATA%25\jellyfin\plugins\$(TargetName)\&quot;&#xD;&#xA;if exist &quot;$(TargetDir)$(TargetName).pdb&quot; xcopy /Y /D &quot;$(TargetDir)$(TargetName).pdb&quot; &quot;%25LOCALAPPDATA%25\jellyfin\plugins\$(TargetName)\&quot;" />
-  </Target>
-
 
 </Project>

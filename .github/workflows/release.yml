@@ -1,0 +1,96 @@
+name: Build and release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROJECT: Jellyfin.Plugin.DateAddedToDateAired/Jellyfin.Plugin.DateAddedToDateAired.csproj
+  ZIP_NAME: Jellyfin.Plugin.DateAddedToDateAired
+  TARGET_ABI: 10.11.0.0
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - run: dotnet restore Jellyfin.Plugin.DateAddedToDateAired.sln --configfile NuGet.config
+      - run: dotnet test Jellyfin.Plugin.DateAddedToDateAired.sln --no-restore
+      - run: dotnet build Jellyfin.Plugin.DateAddedToDateAired.sln -c Release --no-restore
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+      - name: Package the plugin
+        id: package
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          dotnet publish "$PROJECT" -c Release -o package "/p:Version=$VERSION"
+          test -f "package/$ZIP_NAME.dll"
+          find package -maxdepth 1 -type f ! -name "$ZIP_NAME.dll" -delete
+          (cd package && zip -9 "../$ZIP_NAME-$VERSION.zip" "$ZIP_NAME.dll")
+          test "$(unzip -Z1 "$ZIP_NAME-$VERSION.zip")" = "$ZIP_NAME.dll"
+          sha256sum "$ZIP_NAME-$VERSION.zip" | tee "$ZIP_NAME-$VERSION.zip.sha256"
+          md5sum "$ZIP_NAME-$VERSION.zip" | awk '{print $1}' >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "asset=$ZIP_NAME-$VERSION.zip" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.asset }}" "${{ steps.package.outputs.asset }}.sha256" --title "Date Added To Date Aired v${{ steps.package.outputs.version }}" --generate-notes
+      - name: Update plugin manifest with the published asset
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          ASSET: ${{ steps.package.outputs.asset }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          from datetime import datetime, timezone
+          asset = os.environ['ASSET']
+          version = os.environ['VERSION']
+          url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/v{version}/{asset}"
+          with urllib.request.urlopen(url) as response:
+              checksum = hashlib.md5(response.read()).hexdigest()
+          with open('manifest.json') as source:
+              manifest = json.load(source)
+          entry = {
+              'category': 'General', 'guid': 'a7fcd5d8-0879-48d1-96f3-b802a9a91128',
+              'name': 'Date Added To Date Aired', 'owner': 'xEkulx',
+              'overview': 'Use release and air dates for Jellyfin Date Added',
+              'description': 'Server-side Movie and Episode Date Added mapping from PremiereDate.',
+              'versions': []
+          }
+          others = [item for item in manifest if item.get('guid') != entry['guid']]
+          old = next((item for item in manifest if item.get('guid') == entry['guid']), entry)
+          versions = [item for item in old.get('versions', []) if item.get('version') != version]
+          versions.append({'version': version, 'changelog': 'Initial public release.', 'targetAbi': '10.11.0.0', 'sourceUrl': url, 'checksum': checksum, 'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')})
+          old.update(entry); old['versions'] = sorted(versions, key=lambda item: tuple(map(int, item['version'].split('.'))), reverse=True)
+          with open('manifest.json', 'w') as output:
+              json.dump(others + [old], output, indent=2); output.write('\n')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add manifest.json
+          git commit -m "chore: publish manifest for v$VERSION"
+          git push origin HEAD:main

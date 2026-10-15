@@ -12,9 +12,14 @@ namespace Jellyfin.Plugin.DateAddedToDateAired;
 public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
-        : base(applicationPaths, xmlSerializer) => Instance = this;
+        : base(applicationPaths, xmlSerializer)
+    {
+        Instance = this;
+        ActivityLog = new PluginActivityLog(applicationPaths);
+    }
 
     public static Plugin Instance { get; private set; } = null!;
+    public PluginActivityLog ActivityLog { get; }
     public override Guid Id => new("a7fcd5d8-0879-48d1-96f3-b802a9a91128");
     public override string Name => "Date Added To Date Aired";
     public override string Description => "Uses movie release dates and episode air dates for Jellyfin Date Added.";
@@ -22,6 +27,21 @@ public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public IEnumerable<PluginPageInfo> GetPages()
     {
-        yield return new PluginPageInfo { Name = Name, EmbeddedResourcePath = GetType().Namespace + ".Configuration.config.html" };
+        yield return new PluginPageInfo
+        {
+            Name = Name,
+            DisplayName = Name,
+            // Register alongside other dashboard pages so Jellyfin loads the embedded
+            // configuration page as an interactive dashboard route.
+            EnableInMainMenu = true,
+            MenuIcon = "date_range",
+            EmbeddedResourcePath = GetType().Namespace + ".Configuration.config.html"
+        };
+
+        yield return new PluginPageInfo
+        {
+            Name = "DateAddedToDateAired.js",
+            EmbeddedResourcePath = GetType().Namespace + ".Configuration.config.js"
+        };
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,6 +45,41 @@ public sealed class ReleaseDateProcessorTests
         await processor.ProcessAsync(episode, new Folder(), CancellationToken.None);
 
         Assert.Equal(new DateTime(2015, 6, 12, 0, 0, 0, DateTimeKind.Utc), episode.DateCreated);
+    }
+
+    [Theory]
+    [InlineData(typeof(Series))]
+    [InlineData(typeof(Season))]
+    public async Task TvParents_UseTheirOwnCalendarPremiereDateAtUtcMidnight(Type itemType)
+    {
+        using var helper = new PluginTestHelper();
+        var item = (BaseItem)Activator.CreateInstance(itemType)!;
+        item.PremiereDate = new DateTime(2012, 10, 10, 18, 0, 0, DateTimeKind.Local);
+        item.DateCreated = DateTime.UtcNow;
+        var (processor, library) = CreateProcessor();
+
+        var result = await processor.ProcessAsync(item, new Folder(), CancellationToken.None);
+
+        Assert.Equal(ProcessResult.Updated, result);
+        Assert.Equal(new DateTime(2012, 10, 10, 0, 0, 0, DateTimeKind.Utc), item.DateCreated);
+        library.Verify(x => x.UpdateItemAsync(item, It.IsAny<BaseItem>(), ItemUpdateType.MetadataEdit, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SeasonWithoutPremiereDate_UsesEarliestEpisodeAirDate()
+    {
+        using var helper = new PluginTestHelper();
+        var season = new Season { DateCreated = DateTime.UtcNow };
+        var earliestEpisode = new Episode { PremiereDate = new DateTime(2012, 10, 10) };
+        var laterEpisode = new Episode { PremiereDate = new DateTime(2012, 10, 17) };
+        var (processor, library) = CreateProcessor();
+        library.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { laterEpisode, earliestEpisode });
+
+        var result = await processor.ProcessAsync(season, new Folder(), CancellationToken.None);
+
+        Assert.Equal(ProcessResult.Updated, result);
+        Assert.Equal(new DateTime(2012, 10, 10, 0, 0, 0, DateTimeKind.Utc), season.DateCreated);
     }
 
     [Fact]
@@ -94,6 +130,7 @@ internal sealed class PluginTestHelper : IDisposable
         Directory.CreateDirectory(_path);
         var paths = new Mock<IApplicationPaths>();
         paths.SetupGet(x => x.PluginConfigurationsPath).Returns(_path);
+        paths.SetupGet(x => x.LogDirectoryPath).Returns(_path);
         paths.SetupGet(x => x.ConfigurationDirectoryPath).Returns(_path);
         paths.SetupGet(x => x.PluginsPath).Returns(_path);
         paths.SetupGet(x => x.DataPath).Returns(_path);

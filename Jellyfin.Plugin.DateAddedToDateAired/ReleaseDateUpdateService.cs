@@ -29,7 +29,14 @@ public sealed class ReleaseDateUpdateService : IHostedService, IDisposable
             _stopping = new CancellationTokenSource();
             _libraryManager.ItemUpdated += OnItemUpdated;
         }
-        _logger.LogInformation("Date Added To Date Aired automatic processing started.");
+        var configuration = Plugin.Instance.Configuration;
+        _logger.LogInformation(
+            "Date Added To Date Aired automatic processing started. Movies enabled: {EnableMovies}; TV episodes enabled: {EnableTvEpisodes}; automatic updates enabled: {ProcessNewItemsAutomatically}; future dates skipped: {SkipFuturePremiereDates}.",
+            configuration.EnableMovies,
+            configuration.EnableTvEpisodes,
+            configuration.ProcessNewItemsAutomatically,
+            configuration.SkipFuturePremiereDates);
+        Plugin.Instance.ActivityLog.Information($"Automatic processing started. Movies={configuration.EnableMovies}; TV={configuration.EnableTvEpisodes}; Automatic={configuration.ProcessNewItemsAutomatically}; SkipFuture={configuration.SkipFuturePremiereDates}.");
         return Task.CompletedTask;
     }
 
@@ -114,6 +121,7 @@ public sealed class ReleaseDateUpdateService : IHostedService, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not apply a release/air date to {ItemId} ({Name}).", args.Item.Id, args.Item.Name);
+            Plugin.Instance.ActivityLog.Warning($"Automatic update failed for '{args.Item.Name}' ({args.Item.Id}): {ex.Message}");
         }
         finally
         {
@@ -126,7 +134,7 @@ public sealed class ReleaseDateUpdateService : IHostedService, IDisposable
         => item switch
         {
             MediaBrowser.Controller.Entities.Movies.Movie => Plugin.Instance.Configuration.EnableMovies,
-            MediaBrowser.Controller.Entities.TV.Episode => Plugin.Instance.Configuration.EnableTvEpisodes,
+            MediaBrowser.Controller.Entities.TV.Series or MediaBrowser.Controller.Entities.TV.Season or MediaBrowser.Controller.Entities.TV.Episode => Plugin.Instance.Configuration.EnableTvEpisodes,
             _ => false
         };
 }

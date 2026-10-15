@@ -2,61 +2,19 @@
 <html>
 <head><title>Date Added To Date Aired</title></head>
 <body>
-<div id="DateAddedToDateAiredConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+<div id="DateAddedToDateAiredConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox" data-controller="__plugin/DateAddedToDateAired.js">
   <div data-role="content"><div class="content-primary">
     <form id="DateAddedToDateAiredConfigForm">
+      <p id="configStatus" role="status" aria-live="polite">Loading settings…</p>
       <div class="inputContainer"><label class="emby-checkbox-label"><input id="enableMovies" type="checkbox" is="emby-checkbox" /><span>Enable Movies</span></label></div>
-      <div class="inputContainer"><label class="emby-checkbox-label"><input id="enableEpisodes" type="checkbox" is="emby-checkbox" /><span>Enable TV Episodes</span></label></div>
+      <div class="inputContainer"><label class="emby-checkbox-label"><input id="enableEpisodes" type="checkbox" is="emby-checkbox" /><span>Enable TV Series, Seasons &amp; Episodes</span></label></div>
       <div class="inputContainer"><label class="emby-checkbox-label"><input id="automatic" type="checkbox" is="emby-checkbox" /><span>Process new items automatically after metadata updates</span></label></div>
       <div class="inputContainer"><label class="emby-checkbox-label"><input id="skipFuture" type="checkbox" is="emby-checkbox" /><span>Leave future release/air dates unchanged</span></label></div>
       <p>Only Jellyfin's internal Date Added value is changed. NFO files and media files are never modified. Items without a date are left unchanged.</p>
+      <button id="runNow" is="emby-button" type="button" class="raised block emby-button"><span>Run update now</span></button>
       <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
     </form>
   </div></div>
 </div>
-<script>
-(() => {
-  const page = document.querySelector('#DateAddedToDateAiredConfigPage');
-  const form = page.querySelector('#DateAddedToDateAiredConfigForm');
-  const enableMovies = page.querySelector('#enableMovies');
-  const enableEpisodes = page.querySelector('#enableEpisodes');
-  const automatic = page.querySelector('#automatic');
-  const skipFuture = page.querySelector('#skipFuture');
-
-  // Jellyfin's HTTP API serializes plugin configuration with camelCase names.
-  // The PascalCase fallback lets the page continue to display settings returned
-  // by older server builds while updating via the current API contract.
-  const getBoolean = (configuration, camelCaseName, pascalCaseName) => {
-    const value = configuration[camelCaseName] ?? configuration[pascalCaseName];
-    return value === true;
-  };
-
-  const setBoolean = (configuration, camelCaseName, pascalCaseName, value) => {
-    configuration[camelCaseName] = value;
-    delete configuration[pascalCaseName];
-  };
-
-  const load = async () => {
-    const configuration = await ApiClient.getPluginConfiguration(PluginConfig.pluginId);
-    enableMovies.checked = getBoolean(configuration, 'enableMovies', 'EnableMovies');
-    enableEpisodes.checked = getBoolean(configuration, 'enableTvEpisodes', 'EnableTvEpisodes');
-    automatic.checked = getBoolean(configuration, 'processNewItemsAutomatically', 'ProcessNewItemsAutomatically');
-    skipFuture.checked = getBoolean(configuration, 'skipFuturePremiereDates', 'SkipFuturePremiereDates');
-  };
-
-  page.addEventListener('pageshow', load);
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    const configuration = await ApiClient.getPluginConfiguration(PluginConfig.pluginId);
-    setBoolean(configuration, 'enableMovies', 'EnableMovies', enableMovies.checked);
-    setBoolean(configuration, 'enableTvEpisodes', 'EnableTvEpisodes', enableEpisodes.checked);
-    setBoolean(configuration, 'processNewItemsAutomatically', 'ProcessNewItemsAutomatically', automatic.checked);
-    setBoolean(configuration, 'skipFuturePremiereDates', 'SkipFuturePremiereDates', skipFuture.checked);
-    const result = await ApiClient.updatePluginConfiguration(PluginConfig.pluginId, configuration);
-    await load();
-    Dashboard.processPluginConfigurationUpdateResult(result);
-  });
-})();
-</script>
 </body>
 </html>

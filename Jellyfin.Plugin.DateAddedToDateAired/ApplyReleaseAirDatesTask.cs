@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ public sealed class ApplyReleaseAirDatesTask : IScheduledTask, IConfigurableSche
 
     public string Name => "Apply Release/Air Dates to Date Added";
     public string Key => "DateAddedToDateAired.ApplyReleaseAirDates";
-    public string Description => "Sets Movie and Episode Date Added from imported release or air dates.";
+    public string Description => "Sets Movie and TV Series, Season, and Episode Date Added from imported release or air dates.";
     public string Category => "Library";
     public bool IsHidden => false;
     public bool IsEnabled => true;
@@ -31,11 +32,27 @@ public sealed class ApplyReleaseAirDatesTask : IScheduledTask, IConfigurableSche
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
         var movies = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Movie], Recursive = true });
+        var series = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Series], Recursive = true });
+        var seasons = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Season], Recursive = true });
         var episodes = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Episode], Recursive = true });
         var counts = new Counts();
-        var total = movies.Count + episodes.Count;
+        var total = movies.Count + series.Count + seasons.Count + episodes.Count;
         var complete = 0;
         foreach (var item in movies)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await ProcessOneAsync(item, counts, cancellationToken).ConfigureAwait(false);
+            progress.Report(++complete * 100d / Math.Max(1, total));
+        }
+
+        foreach (var item in series)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await ProcessOneAsync(item, counts, cancellationToken).ConfigureAwait(false);
+            progress.Report(++complete * 100d / Math.Max(1, total));
+        }
+
+        foreach (var item in seasons)
         {
             cancellationToken.ThrowIfCancellationRequested();
             await ProcessOneAsync(item, counts, cancellationToken).ConfigureAwait(false);
@@ -49,30 +66,54 @@ public sealed class ApplyReleaseAirDatesTask : IScheduledTask, IConfigurableSche
             progress.Report(++complete * 100d / Math.Max(1, total));
         }
 
-        _logger.LogInformation("Apply Release/Air Dates complete. Movies scanned: {MoviesScanned}; Movies updated: {MoviesUpdated}; Episodes scanned: {EpisodesScanned}; Episodes updated: {EpisodesUpdated}; Missing premiere/air date: {Missing}; Future dates skipped: {Future}; Already correct: {Correct}; Errors: {Errors}.", counts.MoviesScanned, counts.MoviesUpdated, counts.EpisodesScanned, counts.EpisodesUpdated, counts.Missing, counts.Future, counts.Correct, counts.Errors);
+        _logger.LogInformation("Apply Release/Air Dates complete. Movies scanned/updated: {MoviesScanned}/{MoviesUpdated}; Series scanned/updated: {SeriesScanned}/{SeriesUpdated}; Seasons scanned/updated: {SeasonsScanned}/{SeasonsUpdated}; Episodes scanned/updated: {EpisodesScanned}/{EpisodesUpdated}; Missing release/air date: {Missing}; Future dates skipped: {Future}; Already correct: {Correct}; Errors: {Errors}.", counts.MoviesScanned, counts.MoviesUpdated, counts.SeriesScanned, counts.SeriesUpdated, counts.SeasonsScanned, counts.SeasonsUpdated, counts.EpisodesScanned, counts.EpisodesUpdated, counts.Missing, counts.Future, counts.Correct, counts.Errors);
+        Plugin.Instance.ActivityLog.Information($"Scheduled update complete. Movies {counts.MoviesScanned}/{counts.MoviesUpdated}; Series {counts.SeriesScanned}/{counts.SeriesUpdated}; Seasons {counts.SeasonsScanned}/{counts.SeasonsUpdated}; Episodes {counts.EpisodesScanned}/{counts.EpisodesUpdated}; Missing {counts.Missing}; Future {counts.Future}; Correct {counts.Correct}; Errors {counts.Errors}.");
     }
 
     private async Task ProcessOneAsync(BaseItem item, Counts counts, CancellationToken cancellationToken)
     {
-        if (item is Movie) counts.MoviesScanned++; else counts.EpisodesScanned++;
+        switch (item)
+        {
+            case Movie: counts.MoviesScanned++; break;
+            case Series: counts.SeriesScanned++; break;
+            case Season: counts.SeasonsScanned++; break;
+            case Episode: counts.EpisodesScanned++; break;
+        }
         try
         {
             switch (await _processor.ProcessAsync(item, null, cancellationToken).ConfigureAwait(false))
             {
-                case ProcessResult.Updated: if (item is Movie) counts.MoviesUpdated++; else counts.EpisodesUpdated++; break;
+                case ProcessResult.Updated:
+                    switch (item)
+                    {
+                        case Movie: counts.MoviesUpdated++; break;
+                        case Series: counts.SeriesUpdated++; break;
+                        case Season: counts.SeasonsUpdated++; break;
+                        case Episode: counts.EpisodesUpdated++; break;
+                    }
+                    break;
                 case ProcessResult.MissingPremiereDate: counts.Missing++; break;
                 case ProcessResult.FutureDateSkipped: counts.Future++; break;
                 case ProcessResult.AlreadyCorrect: counts.Correct++; break;
             }
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { counts.Errors++; _logger.LogWarning(ex, "Failed to process {ItemId} ({Name}); continuing.", item.Id, item.Name); }
+        catch (Exception ex)
+        {
+            counts.Errors++;
+            _logger.LogWarning(ex, "Failed to process {ItemId} ({Name}); continuing.", item.Id, item.Name);
+            Plugin.Instance.ActivityLog.Warning($"Scheduled update failed for '{item.Name}' ({item.Id}): {ex.Message}");
+        }
     }
 
     private sealed class Counts
     {
         public int MoviesScanned { get; set; }
         public int MoviesUpdated { get; set; }
+        public int SeriesScanned { get; set; }
+        public int SeriesUpdated { get; set; }
+        public int SeasonsScanned { get; set; }
+        public int SeasonsUpdated { get; set; }
         public int EpisodesScanned { get; set; }
         public int EpisodesUpdated { get; set; }
         public int Missing { get; set; }

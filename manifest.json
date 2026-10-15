@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "category": "General",
+    "guid": "a7fcd5d8-0879-48d1-96f3-b802a9a91128",
+    "name": "Date Added To Date Aired",
+    "owner": "xEkulx",
+    "overview": "Use release and air dates for Jellyfin Date Added",
+    "description": "Server-side Movie and Episode Date Added mapping from PremiereDate.",
+    "versions": [
+      {
+        "version": "1.0.0",
+        "changelog": "Initial public release.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/xEkulx/Jellyfin.Plugin.DateAddedToDateAired/releases/download/v1.0.0/Jellyfin.Plugin.DateAddedToDateAired-1.0.0.zip",
+        "checksum": "c819e635d6097537392bf88a543def30",
+        "timestamp": "2026-10-08T09:13:59Z"
+      }
+    ]
+  }
+]

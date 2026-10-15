@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- The plugin targets net9.0; tests target the installed net10 runtime while referencing that assembly. -->
+    <!-- The plugin and tests target the Jellyfin 12/.NET 10 runtime. -->
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

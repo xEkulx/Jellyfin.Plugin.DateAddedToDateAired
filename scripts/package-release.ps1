@@ -28,7 +28,7 @@ Set-Content -LiteralPath "$zip.sha256" -Value "$sha256  $zipName" -NoNewline
 Set-Content -LiteralPath (Join-Path $output 'RELEASE-NOTES.md') -Value @"
 # Date Added To Date Aired v$Version
 
-- Jellyfin 10.11.8 / 10.11.9 (`net9.0`)
+- Jellyfin 12.2 (`net10.0`)
 - Server-side Movie and Episode Date Added mapping from PremiereDate
 - No NFO, media-file, client, or direct database changes
 "@

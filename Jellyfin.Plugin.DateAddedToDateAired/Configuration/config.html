@@ -23,24 +23,38 @@
   const automatic = page.querySelector('#automatic');
   const skipFuture = page.querySelector('#skipFuture');
 
+  // Jellyfin's HTTP API serializes plugin configuration with camelCase names.
+  // The PascalCase fallback lets the page continue to display settings returned
+  // by older server builds while updating via the current API contract.
+  const getBoolean = (configuration, camelCaseName, pascalCaseName) => {
+    const value = configuration[camelCaseName] ?? configuration[pascalCaseName];
+    return value === true;
+  };
+
+  const setBoolean = (configuration, camelCaseName, pascalCaseName, value) => {
+    configuration[camelCaseName] = value;
+    delete configuration[pascalCaseName];
+  };
+
   const load = async () => {
     const configuration = await ApiClient.getPluginConfiguration(PluginConfig.pluginId);
-    enableMovies.checked = configuration.EnableMovies;
-    enableEpisodes.checked = configuration.EnableTvEpisodes;
-    automatic.checked = configuration.ProcessNewItemsAutomatically;
-    skipFuture.checked = configuration.SkipFuturePremiereDates;
+    enableMovies.checked = getBoolean(configuration, 'enableMovies', 'EnableMovies');
+    enableEpisodes.checked = getBoolean(configuration, 'enableTvEpisodes', 'EnableTvEpisodes');
+    automatic.checked = getBoolean(configuration, 'processNewItemsAutomatically', 'ProcessNewItemsAutomatically');
+    skipFuture.checked = getBoolean(configuration, 'skipFuturePremiereDates', 'SkipFuturePremiereDates');
   };
 
   page.addEventListener('pageshow', load);
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const configuration = await ApiClient.getPluginConfiguration(PluginConfig.pluginId);
-    configuration.EnableMovies = enableMovies.checked;
-    configuration.EnableTvEpisodes = enableEpisodes.checked;
-    configuration.ProcessNewItemsAutomatically = automatic.checked;
-    configuration.SkipFuturePremiereDates = skipFuture.checked;
-    await ApiClient.updatePluginConfiguration(PluginConfig.pluginId, configuration);
-    Dashboard.processPluginConfigurationUpdateResult();
+    setBoolean(configuration, 'enableMovies', 'EnableMovies', enableMovies.checked);
+    setBoolean(configuration, 'enableTvEpisodes', 'EnableTvEpisodes', enableEpisodes.checked);
+    setBoolean(configuration, 'processNewItemsAutomatically', 'ProcessNewItemsAutomatically', automatic.checked);
+    setBoolean(configuration, 'skipFuturePremiereDates', 'SkipFuturePremiereDates', skipFuture.checked);
+    const result = await ApiClient.updatePluginConfiguration(PluginConfig.pluginId, configuration);
+    await load();
+    Dashboard.processPluginConfigurationUpdateResult(result);
   });
 })();
 </script>

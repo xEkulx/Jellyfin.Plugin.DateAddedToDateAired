@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Existing semantic version to build and release (without the v prefix)
+        description: Existing semantic version to build and release (for example 1.0.0; a single leading v is accepted)
         required: true
         type: string
       confirm_publish:
@@ -24,15 +24,42 @@ permissions:
 env:
   PROJECT: Jellyfin.Plugin.DateAddedToDateAired/Jellyfin.Plugin.DateAddedToDateAired.csproj
   ZIP_NAME: Jellyfin.Plugin.DateAddedToDateAired
-  TARGET_ABI: 10.11.0.0
+  TARGET_ABI: 12.0.0.0
 
 jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ] || [[ "$REF" == refs/tags/* ]]; then
+            RAW_VERSION="${REQUESTED_VERSION:-$REF_NAME}"
+            VERSION="${RAW_VERSION#v}"
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            printf 'checkout_ref=v%s\ntag=v%s\nversion=%s\n' "$VERSION" "$VERSION" "$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            printf 'checkout_ref=%s\ntag=\nversion=\n' "$SHA" >> "$GITHUB_OUTPUT"
+          fi
+
   verify:
+    needs: resolve-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref }}
+          ref: ${{ needs.resolve-version.outputs.checkout_ref }}
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
@@ -44,30 +71,27 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.confirm_publish == 'yes')
-    needs: verify
+    needs: [resolve-version, verify]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref }}
+          ref: ${{ needs.resolve-version.outputs.checkout_ref }}
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: |
+            9.0.x
+            10.0.x
       - name: Package the plugin
         id: package
         shell: bash
         env:
-          REQUESTED_VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            VERSION="$REQUESTED_VERSION"
-            TAG="v$VERSION"
-          else
-            TAG="$GITHUB_REF_NAME"
-            VERSION="${TAG#v}"
-          fi
+          set -euo pipefail
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           dotnet publish "$PROJECT" -c Release -o package "/p:Version=$VERSION"
           test -f "package/$ZIP_NAME.dll"
@@ -115,7 +139,7 @@ jobs:
           others = [item for item in manifest if item.get('guid') != entry['guid']]
           old = next((item for item in manifest if item.get('guid') == entry['guid']), entry)
           versions = [item for item in old.get('versions', []) if item.get('version') != version]
-          versions.append({'version': version, 'changelog': 'Initial public release.', 'targetAbi': '10.11.0.0', 'sourceUrl': url, 'checksum': checksum, 'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')})
+          versions.append({'version': version, 'changelog': 'Jellyfin 12.2-compatible release.', 'targetAbi': '12.0.0.0', 'sourceUrl': url, 'checksum': checksum, 'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')})
           old.update(entry); old['versions'] = sorted(versions, key=lambda item: tuple(map(int, item['version'].split('.'))), reverse=True)
           with open('manifest.json', 'w') as output:
               json.dump(others + [old], output, indent=2); output.write('\n')

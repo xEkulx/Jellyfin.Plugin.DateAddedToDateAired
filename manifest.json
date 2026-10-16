@@ -8,6 +8,14 @@
     "description": "Server-side Movie and Episode Date Added mapping from PremiereDate.",
     "versions": [
       {
+        "version": "2.0.1",
+        "changelog": "Jellyfin 12.2-compatible release.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/xEkulx/Jellyfin.Plugin.DateAddedToDateAired/releases/download/v2.0.1/Jellyfin.Plugin.DateAddedToDateAired-2.0.1.zip",
+        "checksum": "a33f84cd3354d6d2a9d07107b0296744",
+        "timestamp": "2026-10-16T06:08:06Z"
+      },
+      {
         "version": "2.0.0",
         "changelog": "Jellyfin 12.2-compatible release.",
         "targetAbi": "12.0.0.0",
